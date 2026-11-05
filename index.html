@@ -27,8 +27,21 @@
       <button class="btn gold" id="authSubmit" type="submit">Ingresar</button>
       <p id="authMsg" class="msg" role="alert"></p>
     </form>
-    <p class="auth-alt"><button type="button" class="link" id="authToggle">Solicitar acceso</button></p>
+    <p class="auth-alt"><button type="button" class="link" id="authToggle">Solicitar acceso</button> · <button type="button" class="link" id="authForgot">Olvidé mi contraseña</button></p>
     <p class="fine">Las cuentas nuevas no tienen permisos hasta que un administrador las autorice.</p>
+  </div>
+</main>
+
+<main id="setpw" class="auth" hidden>
+  <div class="auth-box">
+    <img src="assets/logo-asdepica.svg" alt="AS DE PICA" width="210" height="38">
+    <h1>Definí tu contraseña</h1>
+    <form id="pwForm" novalidate>
+      <label>Contraseña nueva <input id="pw1" type="password" autocomplete="new-password" required minlength="10"></label>
+      <label>Repetila <input id="pw2" type="password" autocomplete="new-password" required minlength="10"></label>
+      <button class="btn gold" id="pwSubmit" type="submit">Guardar</button>
+      <p id="pwMsg" class="msg" role="alert"></p>
+    </form>
   </div>
 </main>
 

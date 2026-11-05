@@ -2,6 +2,12 @@
 (() => {
   "use strict";
   const { url, key } = window.SS_CONFIG;
+  const HOME = location.origin + location.pathname;
+  // Se lee antes de crear el cliente: el cliente limpia la dirección al tomar la sesión.
+  const landing = new URLSearchParams(location.hash.slice(1));
+  const linkType = landing.get("type");
+  const linkError = landing.get("error_code") || landing.get("error");
+  let mustSetPassword = linkType === "recovery" || linkType === "invite";
   const db = window.supabase.createClient(url, key, {
     auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
@@ -38,7 +44,7 @@
   function touch() { clearTimeout(idle); if (state.user) idle = setTimeout(() => { db.auth.signOut(); toast("Sesión cerrada por inactividad"); }, IDLE_MS); }
   ["pointerdown", "keydown"].forEach((e) => addEventListener(e, touch, { passive: true }));
 
-  function show(id) { ["boot", "auth", "pending", "app"].forEach((x) => { $("#" + x).hidden = x !== id; }); }
+  function show(id) { ["boot", "auth", "setpw", "pending", "app"].forEach((x) => { $("#" + x).hidden = x !== id; }); }
 
   async function refreshRole() {
     const { data: role } = await db.rpc("ss_current_role");
@@ -46,6 +52,7 @@
   }
   async function onSession(session) {
     if (!session) { state.user = null; state.role = null; state.staged.clear(); show("auth"); return; }
+    if (mustSetPassword) { state.user = session.user; show("setpw"); return; }
     if (state.user?.id === session.user.id && state.role) return;
     state.user = session.user;
     await refreshRole();
@@ -54,7 +61,41 @@
     $("#meEmail").textContent = session.user.email; $("#meRole").textContent = ROLE[state.role];
     show("app"); drawNav(); await loadDash(); route();
   }
-  db.auth.onAuthStateChange((_e, s) => { setTimeout(() => onSession(s), 0); });
+  db.auth.onAuthStateChange((e, s) => {
+    if (e === "PASSWORD_RECOVERY") mustSetPassword = true;
+    setTimeout(() => onSession(s), 0);
+  });
+
+  $("#pwForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const m = $("#pwMsg"), a = $("#pw1").value, b = $("#pw2").value;
+    m.className = "msg"; m.textContent = "";
+    if (a.length < 10) { m.textContent = "Usá 10 caracteres o más."; return; }
+    if (a !== b) { m.textContent = "Las contraseñas no coinciden."; return; }
+    $("#pwSubmit").disabled = true;
+    const { data, error } = await db.auth.updateUser({ password: a });
+    $("#pwSubmit").disabled = false;
+    if (error) { m.textContent = error.message; return; }
+    $("#pw1").value = ""; $("#pw2").value = "";
+    mustSetPassword = false; state.user = null;
+    history.replaceState(null, "", HOME);
+    toast("Contraseña guardada");
+    await onSession({ user: data.user });
+  });
+
+  $("#authForgot").addEventListener("click", async () => {
+    const msg = $("#authMsg"), email = $("#email").value.trim();
+    msg.className = "msg"; msg.textContent = "";
+    if (!email) { msg.textContent = "Escribí tu correo y volvé a tocar «Olvidé mi contraseña»."; return; }
+    const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: HOME });
+    if (error && error.status === 429) { msg.textContent = "Demasiados pedidos. Probá más tarde."; return; }
+    msg.className = "msg good"; msg.textContent = "Si la cuenta existe, te llega un correo con el enlace.";
+  });
+
+  if (linkError) {
+    $("#authMsg").textContent = linkError === "otp_expired" ? "El enlace venció o ya se usó. Pedí uno nuevo." : "No se pudo validar el enlace. Pedí uno nuevo.";
+    history.replaceState(null, "", HOME);
+  }
 
   $("#authToggle").addEventListener("click", () => {
     signup = !signup;
@@ -71,7 +112,7 @@
     const b = $("#authSubmit"); b.disabled = true;
     try {
       if (signup) {
-        const { error } = await db.auth.signUp({ email, password });
+        const { error } = await db.auth.signUp({ email, password, options: { emailRedirectTo: HOME } });
         if (error) throw error;
         msg.className = "msg good"; msg.textContent = "Revisá tu correo para confirmar la cuenta. Después un administrador te da acceso.";
       } else {
@@ -458,8 +499,20 @@
   async function viewUsuarios(v) {
     const u = await call("ss_list_users");
     v.innerHTML = `<div class="head"><div><h1>Usuarios</h1><p>Las cuentas nuevas entran sin permisos. Cada cambio de rol queda auditado.</p></div></div>
+      <form id="inv" class="invite" novalidate><label>Invitar por correo <input id="invMail" type="email" autocomplete="off" required></label><button class="btn" type="submit">Enviar invitación</button></form>
+      <p class="fine gap">La persona invitada entra sin permisos. Asignale el rol acá cuando aparezca en la lista.</p>
       <table class="rows"><thead><tr><th>Correo</th><th>Último ingreso</th><th>Rol</th></tr></thead><tbody>
       ${u.map((x) => `<tr><td class="wide main">${esc(x.email)}</td><td data-l="Último ingreso">${esc(when(x.last_sign_in_at))}</td><td data-l="Rol"><select data-user="${esc(x.id)}" aria-label="Rol de ${esc(x.email)}">${Object.entries(ROLE).map(([k, l]) => `<option value="${k}" ${k === x.role ? "selected" : ""}>${l}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
+    $("#inv").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("#invMail").value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("Correo inválido", true); return; }
+      try {
+        const { error } = await db.functions.invoke("ss-admin", { body: { action: "invite", email } });
+        if (error) { let m = error.message; try { m = (await error.context.json()).error ?? m; } catch {} throw new Error(m); }
+        toast("Invitación enviada"); route();
+      } catch (err) { fail(err); }
+    });
     v.querySelectorAll("[data-user]").forEach((s) => s.addEventListener("change", async () => {
       try { await call("ss_set_user_role", { p_user: s.dataset.user, p_role: s.value }); toast("Rol actualizado"); } catch (e) { fail(e); route(); }
     }));

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#070707">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://wknbqaegebnbptvsllcd.supabase.co; base-uri 'none'; form-action 'none'">
+<title>Smart Stock · AS DE PICA</title>
+<link rel="icon" href="assets/spade-gold.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="boot" class="boot" role="status">Cargando…</div>
+
+<main id="auth" class="auth" hidden>
+  <div class="auth-box">
+    <img src="assets/logo-asdepica.svg" alt="AS DE PICA" width="210" height="38">
+    <h1>Smart Stock</h1>
+    <form id="authForm" novalidate>
+      <label>Correo <input id="email" type="email" autocomplete="username" required></label>
+      <label>Contraseña <input id="password" type="password" autocomplete="current-password" required minlength="10"></label>
+      <button class="btn gold" id="authSubmit" type="submit">Ingresar</button>
+      <p id="authMsg" class="msg" role="alert"></p>
+    </form>
+    <p class="auth-alt"><button type="button" class="link" id="authToggle">Solicitar acceso</button></p>
+    <p class="fine">Las cuentas nuevas no tienen permisos hasta que un administrador las autorice.</p>
+  </div>
+</main>
+
+<main id="pending" class="auth" hidden>
+  <div class="auth-box">
+    <img src="assets/logo-asdepica.svg" alt="AS DE PICA" width="210" height="38">
+    <h1>Acceso pendiente</h1>
+    <p>Tu cuenta <strong id="pendingEmail"></strong> espera la autorización de un administrador.</p>
+    <button class="btn" type="button" data-signout>Salir</button>
+  </div>
+</main>
+
+<div id="app" class="shell" hidden>
+  <aside class="rail">
+    <a class="brand" href="#resumen" aria-label="Resumen"><img src="assets/logo-asdepica.svg" alt="AS DE PICA" width="150" height="27"></a>
+    <nav id="nav" aria-label="Secciones"></nav>
+    <div class="me">
+      <span id="meEmail"></span>
+      <span id="meRole" class="role"></span>
+      <button class="link" type="button" data-signout>Salir</button>
+    </div>
+  </aside>
+  <div class="page">
+    <header class="status" id="status" aria-live="polite"></header>
+    <main id="view" tabindex="-1"></main>
+    <footer class="credit"><a href="https://pixaweb.cl" target="_blank" rel="noopener">Plataforma diseñada y desarrollada por Guido Puglisevich Pixaweb.cl</a></footer>
+  </div>
+</div>
+
+<dialog id="dlg"></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

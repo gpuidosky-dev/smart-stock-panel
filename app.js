@@ -41,6 +41,11 @@
 
   /* ---------- Sesión ---------- */
   let signup = false, idle;
+  if (!window.SS_CONFIG.signupOpen) {
+    $("#authToggle").hidden = true;
+    $("#authSep").hidden = true;
+    $("#authFine").textContent = "Las cuentas se crean por invitación de un administrador.";
+  }
   function touch() { clearTimeout(idle); if (state.user) idle = setTimeout(() => { db.auth.signOut(); toast("Sesión cerrada por inactividad"); }, IDLE_MS); }
   ["pointerdown", "keydown"].forEach((e) => addEventListener(e, touch, { passive: true }));
 
@@ -140,8 +145,12 @@
     if (!state.user || $("#app").hidden) return;
     let cur = (location.hash || "#resumen").slice(1);
     if (!VIEWS[cur] || (cur === "usuarios" && !admin())) cur = "resumen";
-    drawNav();
     const v = $("#view");
+    try { await loadDash(); } catch (e) {
+      await refreshRole();
+      if (!["admin", "operator", "viewer"].includes(state.role)) { $("#pendingEmail").textContent = state.user.email; show("pending"); return; }
+    }
+    if (cur === "usuarios" && !admin()) { location.hash = "#resumen"; return; }
     v.innerHTML = `<p class="skeleton">Cargando ${esc(VIEWS[cur][0].toLowerCase())}…</p>`;
     try { await VIEWS[cur][1](v); } catch (e) { v.innerHTML = `<div class="err-box">No se pudo cargar: ${esc(e.message)} <button class="link" data-retry>Reintentar</button></div>`; }
     window.scrollTo(0, 0);
@@ -151,6 +160,8 @@
 
   async function loadDash() {
     state.dash = await call("ss_dashboard");
+    // El rol manda en el servidor; acá solo se mantiene al día lo que se ve.
+    if (state.dash.role !== state.role) { state.role = state.dash.role; $("#meRole").textContent = ROLE[state.role] ?? state.role; }
     drawStatus(); drawNav();
   }
   function drawStatus() {
@@ -166,7 +177,6 @@
 
   /* ---------- Resumen ---------- */
   async function viewResumen(v) {
-    await loadDash();
     const d = state.dash, h = d.health;
     v.innerHTML = `
       <div class="head"><div><h1>Resumen</h1><p>Tres saldos que nunca se suman entre sí.</p></div></div>
@@ -302,7 +312,7 @@
     if (state.filters.status === "pending") state.filters.status = "";
     if ($("#fe")) $("#fe").value = state.filters.status;
     drawRows(); await loadDash();
-    toast(`${res.ok} registrados${res.duplicate ? `, ${res.duplicate} repetidos` : ""}${res.failed ? `, ${res.failed} con error` : ""}`, res.failed > 0);
+    toast(`${res.ok === 1 ? "1 registrado" : res.ok + " registrados"}${res.duplicate ? `, ${res.duplicate} repetidos` : ""}${res.failed ? `, ${res.failed} con error` : ""}`, res.failed > 0);
   }
 
   /* CSV */

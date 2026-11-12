@@ -131,15 +131,15 @@
 
   /* ---------- Navegación ---------- */
   const VIEWS = {
-    resumen: ["Resumen", viewResumen], conteo: ["Conteo", viewConteo], movimientos: ["Historial", viewMovimientos],
+    resumen: ["Resumen", viewResumen], conteo: ["Conteo", viewConteo], movimientos: ["Historial", viewMovimientos], pedidos: ["Pedidos", viewPedidos],
     ventas: ["Ventas", viewVentas], conciliacion: ["Conciliación", viewConciliacion], alertas: ["Alertas", viewAlertas],
     usuarios: ["Usuarios", viewUsuarios],
   };
   function drawNav() {
     const cur = (location.hash || "#resumen").slice(1);
-    const a = state.dash?.alerts_critical ?? 0;
+    const a = state.dash?.alerts_critical ?? 0, op = state.dash?.orders_pending ?? 0;
     $("#nav").innerHTML = Object.entries(VIEWS).filter(([k]) => k !== "usuarios" || admin()).map(([k, [label]]) =>
-      `<a href="#${k}" ${k === cur ? 'aria-current="page"' : ""}>${label}${k === "alertas" && a ? `<span class="dot">${a}</span>` : ""}</a>`).join("");
+      `<a href="#${k}" ${k === cur ? 'aria-current="page"' : ""}>${label}${k === "alertas" && a ? `<span class="dot">${a}</span>` : ""}${k === "pedidos" && op ? `<span class="dot">${op}</span>` : ""}</a>`).join("");
   }
   async function route() {
     if (!state.user || $("#app").hidden) return;
@@ -171,7 +171,7 @@
     $("#status").innerHTML = `
       <span><i class="lamp ${lamp}"></i>Worker <b>${h.worker_stale ? "detenido" : "activo"}</b></span>
       <span class="opt">Último ciclo <b>${esc(when(h.worker_last_ok))}</b></span>
-      <span><i class="lamp ${pend ? "bad" : "ok"}"></i>Pedidos sin conciliar <b>${pend}</b></span>
+      <span><i class="lamp ${pend ? "bad" : "ok"}"></i>Pedidos para revisar <b>${pend}</b></span>
       <span><i class="lamp ${d.products_enabled ? "warn" : ""}"></i>Ventas <b>${d.products_enabled ? d.products_enabled + " productos activos" : "desactivadas"}</b></span>`;
   }
 
@@ -190,12 +190,14 @@
         ${fact("Productos", d.products_total)}${fact("Variantes", d.variants_total)}${fact("Grupos físicos", d.groups_total)}
         ${fact("Grupos sin contar", d.groups_unverified, d.groups_unverified ? "warn" : "ok")}${fact("Grupos confirmados", d.groups_verified)}
         ${fact("Productos a la venta", d.products_enabled)}${fact("Alertas abiertas", d.alerts_open, d.alerts_critical ? "bad" : d.alerts_open ? "warn" : "ok")}
-        ${fact("Alertas críticas", d.alerts_critical, d.alerts_critical ? "bad" : "ok")}${fact("Pedidos sin conciliar", d.orders_pending, d.orders_pending ? "bad" : "ok")}
+        ${fact("Alertas críticas", d.alerts_critical, d.alerts_critical ? "bad" : "ok")}${fact("Pedidos para revisar", d.orders_pending, d.orders_pending ? "bad" : "ok")}
         ${fact("Worker", h.worker_stale ? "Detenido" : "Activo", h.worker_stale ? "bad" : "ok")}
-        ${fact("Circuito (ss_health)", h.ok ? "Correcto" : "Con problemas", h.ok ? "ok" : "bad")}
+        ${fact("Estado del sistema", h.ok ? "Correcto" : "Requiere revisión", h.ok ? "ok" : "bad")}
         ${fact("Última lectura de Tiendanube", when(h.last_live_check))}${fact("Última publicación", when(d.last_sync))}
       </dl>
-      ${d.groups_unverified ? `<div class="note-box">El circuito puede estar correcto y no haber nada para vender: faltan ${d.groups_unverified} grupos por contar.</div>` : ""}
+      ${d.orders_pending ? `<div class="err-box">${d.orders_pending === 1 ? "Hay 1 pedido" : `Hay ${d.orders_pending} pedidos`} de Tiendanube que no se pudieron descontar del stock. <a href="#pedidos">Ver pedidos</a></div>` : ""}
+      ${d.groups_unverified ? `<div class="note-box">Faltan ${d.groups_unverified} grupos por contar. Mientras un grupo no se cuente, Tiendanube muestra 0 para esas prendas.</div>` : ""}
+      <div class="note-box">El stock se carga solo acá, en <b>Conteo</b>. Si alguien escribe una cantidad a mano en Tiendanube, el sistema la vuelve al valor contado en pocos minutos.</div>
       ${staff() && d.groups_unverified ? `<p><a class="btn gold as-link" href="#conteo">Empezar conteo</a></p>` : ""}`;
   }
   const fact = (k, val, c = "") => `<div><dt>${esc(k)}</dt><dd class="${c}">${esc(val)}</dd></div>`;
@@ -250,7 +252,7 @@
       <td class="n c-in" data-l="Contado">${staff() ? `<input class="count-in" inputmode="numeric" pattern="[0-9]*" maxlength="6" aria-label="Cantidad contada de ${esc(g.sku)}" placeholder="Contado" value="${esc(val)}">` : "—"}</td>
       <td class="n c-diff" data-l="Diferencia"><span class="diff ${diff > 0 ? "pos" : diff < 0 ? "neg" : ""}">${diff === null ? "—" : signed(diff)}</span></td>
       <td class="hide-md wide c-note">${staff() ? `<input class="note-in" maxlength="300" aria-label="Observaciones de ${esc(g.sku)}" placeholder="Observaciones (opcional)" value="${esc(s?.note ?? "")}">` : esc(g.last_note ?? "")}</td>
-      <td class="wide">${status}${last}</td></tr>`;
+      <td class="wide">${status}${last}${g.backlog ? `<div class="sub warn-t">${g.backlog} u. de pedidos pagados esperan este grupo: al contar se descuentan solas</div>` : ""}</td></tr>`;
   }
   document.addEventListener("input", (e) => {
     const tr = e.target.closest?.("tr[data-id]"); if (!tr) return;
@@ -409,6 +411,28 @@
     } catch (e) { box.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
   }
 
+  /* ---------- Pedidos ---------- */
+  const LINE = {
+    committed: ["Descontado del stock", "ok"], reserved: ["Reservado: pago pendiente", "gold"], released: ["Liberado: sin efecto en el stock", "mute"],
+    restocked: ["Devuelto al stock", "mute"], failed: ["No descontado: el grupo no tenía stock contado", "bad"],
+    unmapped: ["Sin grupo físico: la variante no coincide con ninguna prenda", "bad"], unmanaged: ["Fuera de Smart Stock", "mute"], none: ["Sin movimiento", "mute"],
+  };
+  const PAY = { paid: "Pagado", pending: "Pago pendiente", authorized: "Autorizado", voided: "Anulado", refunded: "Reembolsado", partially_refunded: "Reembolso parcial", abandoned: "Abandonado" };
+  let pendingOnly = false;
+  async function viewPedidos(v) {
+    const rows = await call("ss_orders_panel", { p_only_pending: pendingOnly, p_limit: 100 });
+    v.innerHTML = `<div class="head"><div><h1>Pedidos</h1><p>Lo que hizo Smart Stock con cada pedido de Tiendanube. Los pedidos se gestionan en Tiendanube: acá solo se consultan.</p></div></div>
+      <label class="check gap"><input type="checkbox" id="po" ${pendingOnly ? "checked" : ""}> Solo los que requieren atención</label>
+      ${rows.length ? rows.map((o) => `<article class="order ${o.needs_attention ? "attn" : ""}">
+        <div class="order-head"><h3>#${esc(o.number)}</h3>
+          <span class="tag ${o.tn_status === "cancelled" ? "mute" : o.needs_attention ? "bad" : "ok"}">${o.tn_status === "cancelled" ? "Cancelado" : o.needs_attention ? "Requiere atención" : "En orden"}</span>
+          <span class="sub">${esc(when(o.created_at))} · ${esc(PAY[o.payment_status] ?? o.payment_status ?? "—")} · Total $ ${esc(o.total ?? "—")}</span></div>
+        <ul class="order-lines">${(o.lines ?? []).map((l) => { const [t, c] = LINE[l.state] ?? [l.state, "mute"]; return `<li><span>${esc(l.quantity)} × ${esc(l.name)}<span class="sub">${l.group ? esc(l.group) + " · " + esc(l.sku) : "Sin grupo físico"}</span></span><span class="tag ${c}">${esc(t)}</span></li>`; }).join("")}</ul>
+        ${o.needs_attention ? `<p class="order-help"><b>Qué hacer:</b> si fue una prueba, cancelalo en Tiendanube (sin devolver al stock) y se cierra solo. Si es una venta real, contá el grupo en <a href="#conteo">Conteo</a>: el sistema descuenta estas unidades automáticamente.</p>` : ""}
+      </article>`).join("") : `<p class="empty">${pendingOnly ? "No hay pedidos que requieran atención." : "Todavía no hay pedidos."}</p>`}`;
+    $("#po").addEventListener("change", (e) => { pendingOnly = e.target.checked; route(); });
+  }
+
   /* ---------- Ventas ---------- */
   async function viewVentas(v) {
     const r = await call("ss_products_overview");
@@ -492,11 +516,24 @@
   }
 
   /* ---------- Alertas ---------- */
+  const HELP = {
+    oversell: "Un pedido pagado no se pudo descontar porque el grupo no tiene stock contado. Revisalo en Pedidos.",
+    unmapped_variant: "Una variante de Tiendanube no coincide con ninguna prenda (corte, color o talle). Pedile a Pixaweb que la asocie.",
+    tn_stock_drift: "Alguien cambió el stock directamente en Tiendanube. El sistema lo volvió al valor contado.",
+    worker_stale: "La sincronización automática está detenida. Avisá a Pixaweb.",
+    queue_backlog: "Hay pedidos de Tiendanube esperando ser procesados. Si dura más de 15 minutos, avisá a Pixaweb.",
+    sync_error: "No se pudo actualizar el stock en Tiendanube. Se reintenta solo; si sigue, avisá a Pixaweb.",
+    restock_pending: "Se canceló un pedido ya despachado: decidí a mano si la prenda volvió y, si volvió, contá el grupo.",
+    stock_unverified: "Hay grupos sin conteo físico: no se venden hasta contarlos.",
+    reconciliation_mismatch: "La conciliación encontró diferencias. Revisalas en Conciliación.",
+    out_of_stock: "Un grupo contado quedó en 0.", low_stock: "Un grupo contado está por debajo del mínimo.",
+    webhook_failure: "Un aviso de Tiendanube no se pudo procesar tras varios intentos. Avisá a Pixaweb.",
+  };
   async function viewAlertas(v) {
     const a = await call("ss_panel_alerts");
     const G = [["critico", "Problemas críticos"], ["operativa", "Advertencias operativas"], ["comercial", "Pendientes comerciales"]];
     v.innerHTML = `<div class="head"><div><h1>Alertas</h1><p>Cada problema aparece una sola vez, con sus repeticiones contadas.</p></div></div>
-      ${a.length ? G.map(([k, l]) => { const rows = a.filter((x) => x.class === k); return rows.length ? `<section class="alert-group"><h2>${l}</h2>${rows.map((x) => `<div class="alert ${k}"><div>${esc(x.subject)}<small>${esc(when(x.last_seen_at))}${x.occurrences > 1 ? ` · ${x.occurrences} veces` : ""}</small></div>${staff() && x.kind !== "stock_unverified" ? `<button class="btn small" data-res="${esc(x.id)}">Resolver</button>` : ""}</div>`).join("")}</section>` : ""; }).join("") : `<p class="empty">Sin alertas abiertas.</p>`}`;
+      ${a.length ? G.map(([k, l]) => { const rows = a.filter((x) => x.class === k); return rows.length ? `<section class="alert-group"><h2>${l}</h2>${rows.map((x) => `<div class="alert ${k}"><div>${esc(x.subject)}${HELP[x.kind] ? `<small class="help">${esc(HELP[x.kind])}</small>` : ""}<small>${esc(when(x.last_seen_at))}${x.occurrences > 1 ? ` · ${x.occurrences} veces` : ""}</small></div>${staff() && x.kind !== "stock_unverified" ? `<button class="btn small" data-res="${esc(x.id)}">Resolver</button>` : ""}</div>`).join("")}</section>` : ""; }).join("") : `<p class="empty">Sin alertas abiertas.</p>`}`;
     v.querySelectorAll("[data-res]").forEach((b) => b.addEventListener("click", () => {
       const dlg = $("#dlg");
       dlg.innerHTML = `<h2>Resolver alerta</h2><p>Si la causa sigue, la alerta vuelve a abrirse sola.</p><label class="f">Nota <textarea id="why" rows="2" maxlength="300"></textarea></label><div class="dlg-actions"><button class="btn" id="no">Cancelar</button><button class="btn gold" id="yes">Resolver</button></div>`;

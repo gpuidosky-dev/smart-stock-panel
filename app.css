@@ -140,6 +140,18 @@ table.rows { width: 100%; border-collapse: collapse; }
 .checks .d { color: var(--cream-2); text-align: right; }
 .checks .y { color: var(--ok); } .checks .x { color: var(--bad); }
 
+/* Pedidos */
+.order { padding: 14px 0 16px 14px; border-bottom: 1px solid var(--rule); border-left: 3px solid var(--rule-2); }
+.order.attn { border-left-color: var(--bad); }
+.order-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.order-head h3 { font-size: 22px; }
+.order-lines { list-style: none; padding: 0; margin: 10px 0 0; }
+.order-lines li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--rule); }
+.order-lines li .sub { display: block; }
+.order-help { margin: 10px 0 0; color: var(--cream-2); font-size: 14px; }
+.warn-t { color: var(--warn); }
+.alert .help { color: var(--cream-2); margin-top: 2px; }
+
 /* Alertas */
 .alert-group { margin-top: 26px; }
 .alert-group h2 { margin-top: 0; }
@@ -169,7 +181,10 @@ dialog label.f input, dialog label.f textarea { display: block; width: 100%; mar
   .rows .hide-md { display: none; }
   .product { grid-template-columns: 1fr; gap: 12px; }
 }
+.count-table .c-grp .sub { display: none; }
 @media (max-width: 900px) {
+  .count-table .c-grp .sub { display: block; }
+  .order-lines li { flex-direction: column; }
   .shell { grid-template-columns: minmax(0, 1fr); }
   .rail { position: fixed; z-index: 10; top: auto; bottom: 0; left: 0; right: 0; height: auto; flex-direction: row; padding: 0 0 env(safe-area-inset-bottom); border-right: 0; border-top: 1px solid var(--rule-2); }
   .rail .brand, .rail .me { display: none; }

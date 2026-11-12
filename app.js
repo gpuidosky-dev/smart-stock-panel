@@ -374,6 +374,10 @@
   }
 
   /* ---------- Historial ---------- */
+  // Traduce los estados internos que guarda el historial a lenguaje del negocio.
+  const STATE = { none: "sin estado", reserved: "reservado", committed: "vendido", released: "liberado", restocked: "devuelto", failed: "no descontado" };
+  const SRC = { admin: "Panel", tiendanube: "Tiendanube", test: "Prueba", smart_stock: "Carga inicial" };
+  const human = (d) => String(d ?? "").replace(/\b(none|reserved|committed|released|restocked|failed) -> (none|reserved|committed|released|restocked|failed)\b/g, (m, a, b) => `${STATE[a]} → ${STATE[b]}`);
   const MOV = { receipt: "Entrada", initial: "Inicial", manual: "Manual", sale: "Venta", reservation: "Reserva", release: "Liberación", restock: "Restitución", cancellation: "Cancelación", physical_count: "Conteo físico", adjustment: "Ajuste", reconciliation: "Conciliación" };
   async function viewMovimientos(v) {
     v.innerHTML = `<div class="head"><div><h1>Historial</h1><p>Registro contable inmutable: nadie puede editarlo ni borrarlo.</p></div></div>
@@ -404,7 +408,7 @@
           <td class="n" data-l="Cantidad"><span class="diff ${x.delta > 0 ? "pos" : x.delta < 0 ? "neg" : ""}">${signed(x.delta)}</span>${x.reserved_delta ? `<div class="sub">res. ${signed(x.reserved_delta)}</div>` : ""}</td>
           <td class="n" data-l="Saldo">${num(x.quantity_before)} → ${num(x.quantity_after)}</td>
           <td class="hide-md wide">${esc(x.actor)}</td>
-          <td class="wide">${esc(x.source)}${x.order_id ? ` · pedido ${esc(x.order_id)}` : ""}<div class="sub">${esc(x.detail)}</div></td></tr>`).join("")}</tbody></table>
+          <td class="wide">${esc(SRC[x.source] ?? x.source)}${x.order_id ? ` · pedido ${esc(x.order_id)}` : ""}<div class="sub">${esc(human(x.detail))}</div></td></tr>`).join("")}</tbody></table>
         <div class="pager"><span>${num(r.total)} movimientos · página ${m.page + 1} de ${pages}</span><span class="actions"><button class="btn small" id="pv" ${m.page ? "" : "disabled"}>Anterior</button><button class="btn small" id="nx" ${m.page + 1 < pages ? "" : "disabled"}>Siguiente</button></span></div>`;
       $("#pv")?.addEventListener("click", () => { m.page--; loadMov(); });
       $("#nx")?.addEventListener("click", () => { m.page++; loadMov(); });
@@ -491,8 +495,8 @@
       <dl class="facts">${fact("Variantes revisadas", last?.checked ?? 0)}${fact("Diferencias ahora", diffs.length, diffs.length ? "bad" : "ok")}
         ${fact("Última lectura de Tiendanube", when(last?.finished_at))}${fact("Corregidas en esa lectura", last?.details?.drift?.length ?? 0)}
         ${fact("Sin mapeo", last?.details?.unmapped?.length ?? 0, last?.details?.unmapped?.length ? "bad" : "ok")}
-        ${fact("Conciliación interna", lastI ? `${lastI.mismatches} diferencias` : "—", lastI?.mismatches ? "bad" : "ok")}
-        ${fact("Eventos pendientes", r.pending_events, r.pending_events ? "warn" : "ok")}${fact("Líneas sin descontar", r.failed_lines, r.failed_lines ? "bad" : "ok")}</dl>
+        ${fact("Revisión interna de Supabase", lastI ? `${lastI.mismatches} diferencias` : "—", lastI?.mismatches ? "bad" : "ok")}
+        ${fact("Avisos de Tiendanube en revisión", r.pending_events, r.pending_events ? "warn" : "ok")}${fact("Líneas de pedidos sin descontar", r.failed_lines, r.failed_lines ? "bad" : "ok")}</dl>
       <h2>Variantes</h2>
       <label class="check gap"><input type="checkbox" id="od" ${onlyDiff ? "checked" : ""}> Solo diferencias</label>
       ${list.length ? `<table class="rows"><thead><tr><th>Variante</th><th class="n">Maestro</th><th class="n">Reservado</th><th class="n">Vendido</th><th class="n">Debe publicar</th><th class="n">Tiendanube</th><th>Estado</th></tr></thead><tbody>
